@@ -1,4 +1,4 @@
-# Real Estate Listing Summarizer
+# HomeBrief - Real Estate Listing Summarizer
 
 A web application that ingests unstructured, messy real estate property descriptions and parses them into standardized, structured records using Groq's LLM inference and Pydantic validation.
 

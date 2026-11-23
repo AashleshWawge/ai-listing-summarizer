@@ -5,7 +5,6 @@ import {
   FileText,
   AlertCircle,
   Loader2,
-  Code2,
   RotateCcw,
   Plus,
   ChevronDown,
@@ -213,14 +212,30 @@ export default function App() {
     }
   };
 
-  const downloadJson = () => {
+  const downloadCsv = () => {
     if (results.length === 0) return;
-    const jsonStr = JSON.stringify(results, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const escapeCsv = (val) => {
+      if (val === null || val === undefined) return '""';
+      const text = String(val).replace(/"/g, '""');
+      return `"${text}"`;
+    };
+
+    const headers = ['id', 'location', 'bedrooms', 'price', 'key_features', 'summary'];
+    const rows = results.map((item) => [
+      item.id,
+      escapeCsv(item.location),
+      item.bedrooms ?? '',
+      escapeCsv(item.price),
+      escapeCsv((item.key_features || []).join('; ')),
+      escapeCsv(item.summary),
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `listings_${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `listings_summary_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -305,7 +320,7 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
               <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--navy)', letterSpacing: '-0.02em' }}>
-                nextburb
+                HomeBrief
               </span>
               <span style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                 Listing Summarizer
@@ -700,25 +715,6 @@ export default function App() {
               >
                 Cards
               </button>
-              <button
-                onClick={() => setViewMode('json')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-subtle)',
-                  background: viewMode === 'json' ? 'var(--navy)' : 'var(--bg-surface)',
-                  color: viewMode === 'json' ? '#fff' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontWeight: 500,
-                  fontSize: '0.82rem'
-                }}
-              >
-                <Code2 size={13} />
-                JSON
-              </button>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -740,7 +736,7 @@ export default function App() {
               />
 
               <button
-                onClick={downloadJson}
+                onClick={downloadCsv}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -756,7 +752,7 @@ export default function App() {
                 }}
               >
                 <Download size={13} />
-                Download JSON
+                Download CSV
               </button>
             </div>
           </div>
@@ -906,27 +902,6 @@ export default function App() {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-
-          {/* JSON View */}
-          {viewMode === 'json' && (
-            <div style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '8px',
-              padding: '16px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-            }}>
-              <pre style={{
-                maxHeight: '400px',
-                overflowY: 'auto',
-                fontSize: '0.8rem',
-                color: 'var(--navy)',
-                lineHeight: 1.45
-              }}>
-                {JSON.stringify(results, null, 2)}
-              </pre>
             </div>
           )}
         </section>

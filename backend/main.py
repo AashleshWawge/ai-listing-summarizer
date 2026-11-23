@@ -21,7 +21,7 @@ RATE_LIMIT_DEFAULT = os.getenv("RATE_LIMIT", "20/minute")
 limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_DEFAULT])
 
 app = FastAPI(
-    title="Listing Summarizer API",
+    title="HomeBrief API",
     version="1.0.0"
 )
 
