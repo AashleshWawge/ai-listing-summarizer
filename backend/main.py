@@ -170,10 +170,11 @@ def health_check():
 
 @app.get("/api/sample", response_model=List[ListingInput])
 @limiter.limit("60/minute")
-def get_sample_listings(request: Request):
-    csv_path = os.path.join(os.path.dirname(__file__), "sample_listings.csv")
+def get_sample_listings(request: Request, city: str = "pune"):
+    filename = "sample_listings_mumbai.csv" if city.lower() == "mumbai" else "sample_listings.csv"
+    csv_path = os.path.join(os.path.dirname(__file__), filename)
     if not os.path.exists(csv_path):
-        raise HTTPException(status_code=404, detail="sample_listings.csv not found")
+        raise HTTPException(status_code=404, detail=f"{filename} not found")
 
     items: List[ListingInput] = []
     with open(csv_path, mode="r", encoding="utf-8") as f:

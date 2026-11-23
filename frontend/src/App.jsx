@@ -9,12 +9,14 @@ import {
   RotateCcw,
   Plus,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  MapPin,
+  Home
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-const SAMPLE_LISTINGS = [
+const PUNE_SAMPLES = [
   {
     id: 1,
     description: "Spacious 3 BHK in Baner, near Balewadi High Street. 1650 sq ft built-up, top floor with scenic hill view, modular kitchen, 2 covered car parkings. Expected price 1.45 Cr (slightly negotiable). Amenities: club house, swimming pool, power backup. Contact immediately brokers excuse."
@@ -49,28 +51,94 @@ const SAMPLE_LISTINGS = [
   }
 ];
 
+const MUMBAI_SAMPLES = [
+  {
+    id: 1,
+    description: "Bandra West Pali Hill luxury 3BHK flat on mid floor, sea view from master bedroom. Carpet 1380 sq ft, 2 stilt parking, oc received. Quoting 8.25 Cr negotiable. Verified clean title. Serious buyers only no heavy negotiation."
+  },
+  {
+    id: 2,
+    description: "Andheri East near Chakala metro: compact 1 RK / studio flat for bachelor or working couple. 340 sqft carpet, semi-furnished with ac, geyser and modular kitchen. Asking rent 28k/month + 80k deposit. Available from 1st of next month."
+  },
+  {
+    id: 3,
+    description: "Powai Hiranandani Gardens 2.5 BHK in heritage tower. 1150 sqft carpet, fully furnished luxury interiors, Lake view, modular fittings, 1 covered parking. Demanding 3.10 Crores all inclusive. Amenities include clubhouse, tennis court."
+  },
+  {
+    id: 4,
+    description: "Worli seaface facing ultra luxury 4 BHK sea view apartment. 2800 sq ft carpet, wrap around sundeck, Italian marble flooring, 3 car parkings. Price on request for qualified HNIs. 24x7 concierge and valet service."
+  },
+  {
+    id: 5,
+    description: "Dadar West near Shivaji Park: 2 BHK old building flat, 3rd floor without lift, high ceiling, cross ventilation. Carpet 740 sqft. 1.85 Cr final. Reputed society, walkable to western & central railway stations."
+  },
+  {
+    id: 6,
+    description: "Thane West Ghodbunder Road: 2 BHK flat in Hiranandani Estate. 720 sq ft carpet. Ready to move, garden facing, piped gas, clubhouse access. Price: 95 Lakhs slightly negotiable. Bank loan approved from all major banks."
+  },
+  {
+    id: 7,
+    description: "Juhu Gulmohar Road: 3 BHK penthouse with private 600 sqft open terrace, 1600 sqft carpet inside. Fully vastu compliant, north-east facing. Expected 6.50 Cr. Very close to Juhu beach and international schools."
+  },
+  {
+    id: 8,
+    description: "Malad West near Inorbit Mall: Brand new 1 BHK high rise apartment on 28th floor, unobstructed city view. 465 sqft carpet. Expected price 78 Lakhs + registration. Possession in 2 months with OC."
+  }
+];
+
+function parsePriceToLakhs(priceStr) {
+  if (!priceStr || typeof priceStr !== 'string') return null;
+  const clean = priceStr.toLowerCase().replace(/,/g, '').trim();
+
+  if (clean.includes('/ month') || clean.includes('/month') || clean.includes('month') || clean.includes('request') || clean.includes('n/a')) {
+    return null;
+  }
+
+  const crMatch = clean.match(/([\d.]+)\s*(?:cr|crore|crores)/);
+  if (crMatch) {
+    const val = parseFloat(crMatch[1]);
+    if (!isNaN(val)) return val * 100;
+  }
+
+  const lakhMatch = clean.match(/([\d.]+)\s*(?:lakh|lakhs|lac|lacs)/);
+  if (lakhMatch) {
+    const val = parseFloat(lakhMatch[1]);
+    if (!isNaN(val)) return val;
+  }
+
+  const numMatch = clean.match(/(?:₹|rs\.?)?\s*([\d.]+)/);
+  if (numMatch) {
+    const val = parseFloat(numMatch[1]);
+    if (!isNaN(val) && val >= 100000) {
+      return val / 100000;
+    }
+  }
+
+  return null;
+}
+
 export default function App() {
   const [listings, setListings] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('table'); // Default to table for data-dense productivity
+  const [viewMode, setViewMode] = useState('table');
   const [filterText, setFilterText] = useState('');
   const [inputText, setInputText] = useState('');
   const [expandedRows, setExpandedRows] = useState({});
 
-  const loadSamples = async () => {
+  const loadSamples = async (city = 'pune') => {
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/sample`);
+      const res = await fetch(`${API_BASE}/api/sample?city=${city}`);
       if (res.ok) {
         const data = await res.json();
         setListings(data);
       } else {
-        setListings(SAMPLE_LISTINGS);
+        setListings(city === 'mumbai' ? MUMBAI_SAMPLES : PUNE_SAMPLES);
       }
     } catch {
-      setListings(SAMPLE_LISTINGS);
+      setListings(city === 'mumbai' ? MUMBAI_SAMPLES : PUNE_SAMPLES);
     }
   };
 
@@ -122,6 +190,7 @@ export default function App() {
     if (listings.length === 0) return;
     setLoading(true);
     setError(null);
+    setResults([]);
 
     try {
       const res = await fetch(`${API_BASE}/api/summarize`, {
@@ -171,14 +240,24 @@ export default function App() {
 
   const stats = useMemo(() => {
     if (results.length === 0) return null;
-    const withBeds = results.filter((r) => typeof r.bedrooms === 'number');
-    const avg = withBeds.length > 0
-      ? (withBeds.reduce((acc, curr) => acc + (curr.bedrooms || 0), 0) / withBeds.length).toFixed(1)
-      : 'N/A';
+    const pricesInLakhs = results
+      .map((r) => parsePriceToLakhs(r.price))
+      .filter((v) => typeof v === 'number');
+
+    let formattedPrice = 'N/A';
+    if (pricesInLakhs.length > 0) {
+      const avgLakhs = pricesInLakhs.reduce((a, b) => a + b, 0) / pricesInLakhs.length;
+      if (avgLakhs >= 100) {
+        formattedPrice = `₹${(avgLakhs / 100).toFixed(2)} Cr`;
+      } else {
+        formattedPrice = `₹${avgLakhs.toFixed(1)} L`;
+      }
+    }
+
     const locs = new Set(results.map((r) => r.location).filter(Boolean)).size;
     return {
       total: results.length,
-      avgBeds: avg,
+      avgPrice: formattedPrice,
       locations: locs,
     };
   }, [results]);
@@ -196,60 +275,105 @@ export default function App() {
   }, [results, filterText]);
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
-      {/* Top Header */}
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
+      {/* Top Header with Nextburb Brand Colors */}
       <header style={{
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'baseline',
+        alignItems: 'center',
         flexWrap: 'wrap',
         gap: '16px',
-        paddingBottom: '16px',
+        paddingBottom: '20px',
         borderBottom: '1px solid var(--border-subtle)',
-        marginBottom: '24px'
+        marginBottom: '28px'
       }}>
-        <div>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-            Listing Summarizer
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '2px' }}>
-            Parse unstructured real estate descriptions into structured records.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* Nextburb signature coral house icon */}
+          <div style={{
+            background: 'var(--accent)',
+            width: '42px',
+            height: '42px',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            boxShadow: '0 2px 8px rgba(255, 75, 110, 0.25)'
+          }}>
+            <Home size={22} strokeWidth={2.4} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--navy)', letterSpacing: '-0.02em' }}>
+                nextburb
+              </span>
+              <span style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Listing Summarizer
+              </span>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.84rem', marginTop: '2px' }}>
+              Extract structured property data from messy real estate descriptions into JSON.
+            </p>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
-            onClick={loadSamples}
+            onClick={() => loadSamples('pune')}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 12px',
-              borderRadius: '6px',
+              padding: '7px 13px',
+              borderRadius: '7px',
               border: '1px solid var(--border-subtle)',
               background: 'var(--bg-surface)',
-              color: 'var(--text-primary)',
+              color: 'var(--navy)',
               cursor: 'pointer',
-              fontSize: '0.82rem'
+              fontWeight: 500,
+              fontSize: '0.82rem',
+              transition: 'all 0.15s ease'
             }}
           >
-            <FileText size={14} />
-            Load sample data
+            <FileText size={14} color="var(--accent)" />
+            Pune sample
+          </button>
+
+          <button
+            onClick={() => loadSamples('mumbai')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 13px',
+              borderRadius: '7px',
+              border: '1px solid var(--border-subtle)',
+              background: 'var(--bg-surface)',
+              color: 'var(--navy)',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '0.82rem',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <FileText size={14} color="var(--accent)" />
+            Mumbai sample
           </button>
 
           <label style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '6px 12px',
-            borderRadius: '6px',
+            padding: '7px 13px',
+            borderRadius: '7px',
             border: '1px solid var(--border-subtle)',
             background: 'var(--bg-surface)',
-            color: 'var(--text-primary)',
+            color: 'var(--navy)',
             cursor: 'pointer',
+            fontWeight: 500,
             fontSize: '0.82rem'
           }}>
-            <Upload size={14} />
+            <Upload size={14} color="var(--text-secondary)" />
             Upload CSV
             <input
               type="file"
@@ -266,8 +390,8 @@ export default function App() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '6px',
+                padding: '7px 11px',
+                borderRadius: '7px',
                 border: '1px solid var(--border-subtle)',
                 background: 'transparent',
                 color: 'var(--text-secondary)',
@@ -286,24 +410,25 @@ export default function App() {
       <section style={{
         background: 'var(--bg-surface)',
         border: '1px solid var(--border-subtle)',
-        borderRadius: '8px',
-        padding: '16px',
-        marginBottom: '24px'
+        borderRadius: '10px',
+        padding: '18px 20px',
+        marginBottom: '24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
       }}>
         <form onSubmit={addManualListing} style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Paste a single listing description..."
+            placeholder="Paste a single listing description (e.g. '3 BHK in Baner for 1.45 Cr with terrace')..."
             style={{
               flex: 1,
-              padding: '8px 12px',
+              padding: '9px 13px',
               background: 'var(--bg-page)',
               border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
+              borderRadius: '7px',
               color: 'var(--text-primary)',
-              fontSize: '0.84rem',
+              fontSize: '0.85rem',
               outline: 'none'
             }}
           />
@@ -314,13 +439,13 @@ export default function App() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              padding: '8px 14px',
-              borderRadius: '6px',
+              padding: '9px 16px',
+              borderRadius: '7px',
               border: 'none',
-              background: inputText.trim() ? 'var(--text-primary)' : 'var(--bg-subtle)',
-              color: inputText.trim() ? 'var(--bg-page)' : 'var(--text-tertiary)',
+              background: inputText.trim() ? 'var(--navy)' : 'var(--bg-subtle)',
+              color: inputText.trim() ? '#fff' : 'var(--text-tertiary)',
               cursor: inputText.trim() ? 'pointer' : 'not-allowed',
-              fontWeight: 500,
+              fontWeight: 600,
               fontSize: '0.82rem'
             }}
           >
@@ -332,7 +457,7 @@ export default function App() {
         {listings.length > 0 ? (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+              <span style={{ fontSize: '0.83rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                 {listings.length} {listings.length === 1 ? 'listing' : 'listings'} queued
               </span>
               <button
@@ -342,14 +467,15 @@ export default function App() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  padding: '7px 16px',
-                  borderRadius: '6px',
+                  padding: '8px 18px',
+                  borderRadius: '7px',
                   border: 'none',
                   background: 'var(--accent)',
                   color: '#fff',
                   cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 500,
-                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  boxShadow: '0 2px 6px rgba(255, 75, 110, 0.25)',
                   opacity: loading ? 0.75 : 1
                 }}
               >
@@ -367,20 +493,20 @@ export default function App() {
             <div style={{
               maxHeight: '140px',
               overflowY: 'auto',
-              borderRadius: '6px',
+              borderRadius: '7px',
               background: 'var(--bg-page)',
               border: '1px solid var(--border-subtle)',
-              padding: '6px 10px'
+              padding: '6px 12px'
             }}>
               {listings.map((item) => (
                 <div key={item.id} style={{
-                  padding: '5px 0',
+                  padding: '6px 0',
                   borderBottom: '1px solid var(--border-subtle)',
-                  fontSize: '0.8rem',
+                  fontSize: '0.82rem',
                   display: 'flex',
-                  gap: '8px'
+                  gap: '10px'
                 }}>
-                  <span style={{ color: 'var(--text-tertiary)', minWidth: '24px' }}>#{item.id}</span>
+                  <span style={{ color: 'var(--accent)', fontWeight: 600, minWidth: '24px' }}>#{item.id}</span>
                   <span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {item.description}
                   </span>
@@ -393,19 +519,19 @@ export default function App() {
             textAlign: 'center',
             padding: '24px 12px',
             color: 'var(--text-tertiary)',
-            fontSize: '0.82rem'
+            fontSize: '0.83rem'
           }}>
-            No listings loaded. Click "Load sample data" or upload a CSV file.
+            No listings loaded. Click "Pune sample", "Mumbai sample", or upload a CSV file.
           </div>
         )}
 
         {error && (
           <div style={{
             marginTop: '12px',
-            padding: '10px 12px',
-            borderRadius: '6px',
-            background: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid rgba(239, 68, 68, 0.2)',
+            padding: '10px 14px',
+            borderRadius: '7px',
+            background: 'var(--danger-bg)',
+            border: '1px solid #fecdd3',
             color: 'var(--danger-text)',
             display: 'flex',
             alignItems: 'center',
@@ -418,25 +544,88 @@ export default function App() {
         )}
       </section>
 
+      {/* Loading Skeleton Animation View during AI Processing */}
+      {loading && (
+        <section style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: '10px',
+          padding: '20px',
+          marginBottom: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--navy)' }}>
+              <Loader2 size={16} className="animate-spin" color="var(--accent)" />
+              <span>Extracting attributes for {listings.length} listings...</span>
+            </div>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+              Validating JSON schema
+            </span>
+          </div>
+
+          <div style={{
+            width: '100%',
+            height: '3px',
+            background: 'var(--bg-subtle)',
+            borderRadius: '2px',
+            overflow: 'hidden',
+            marginBottom: '20px'
+          }}>
+            <div style={{
+              height: '100%',
+              background: 'var(--accent)',
+              animation: 'progressPulse 1.8s ease-in-out infinite'
+            }} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {Array.from({ length: Math.min(listings.length || 5, 5) }).map((_, idx) => (
+              <div key={idx} style={{
+                display: 'grid',
+                gridTemplateColumns: '40px 130px 80px 110px 200px 1fr',
+                gap: '12px',
+                padding: '10px 12px',
+                background: 'var(--bg-page)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '6px',
+                alignItems: 'center'
+              }}>
+                <div className="skeleton" style={{ height: '14px', width: '20px' }} />
+                <div className="skeleton" style={{ height: '14px', width: '90px' }} />
+                <div className="skeleton" style={{ height: '14px', width: '50px' }} />
+                <div className="skeleton" style={{ height: '14px', width: '75px' }} />
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <div className="skeleton" style={{ height: '14px', width: '55px' }} />
+                  <div className="skeleton" style={{ height: '14px', width: '65px' }} />
+                </div>
+                <div className="skeleton" style={{ height: '14px', width: '85%' }} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Results View */}
-      {results.length > 0 && (
+      {!loading && results.length > 0 && (
         <section>
           {stats && (
             <div style={{
               display: 'flex',
-              gap: '12px',
-              marginBottom: '16px',
+              gap: '14px',
+              marginBottom: '18px',
               flexWrap: 'wrap'
             }}>
               <div style={{
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-subtle)',
-                borderRadius: '6px',
-                padding: '10px 16px',
-                flex: '1 1 120px'
+                borderRadius: '8px',
+                padding: '12px 18px',
+                flex: '1 1 120px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
               }}>
-                <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>Listings</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Listings</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--navy)', marginTop: '2px' }}>
                   {stats.total}
                 </div>
               </div>
@@ -444,25 +633,27 @@ export default function App() {
               <div style={{
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-subtle)',
-                borderRadius: '6px',
-                padding: '10px 16px',
-                flex: '1 1 120px'
+                borderRadius: '8px',
+                padding: '12px 18px',
+                flex: '1 1 120px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
               }}>
-                <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>Avg. bedrooms</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
-                  {stats.avgBeds} <span style={{ fontSize: '0.78rem', fontWeight: 400, color: 'var(--text-tertiary)' }}>BHK</span>
+                <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Avg. price</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)', marginTop: '2px' }}>
+                  {stats.avgPrice}
                 </div>
               </div>
 
               <div style={{
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-subtle)',
-                borderRadius: '6px',
-                padding: '10px 16px',
-                flex: '1 1 120px'
+                borderRadius: '8px',
+                padding: '12px 18px',
+                flex: '1 1 120px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
               }}>
-                <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>Locations</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Locations</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--navy)', marginTop: '2px' }}>
                   {stats.locations}
                 </div>
               </div>
@@ -474,7 +665,7 @@ export default function App() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '12px',
+            marginBottom: '14px',
             flexWrap: 'wrap',
             gap: '10px'
           }}>
@@ -482,13 +673,14 @@ export default function App() {
               <button
                 onClick={() => setViewMode('table')}
                 style={{
-                  padding: '5px 12px',
-                  borderRadius: '5px',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
                   border: '1px solid var(--border-subtle)',
-                  background: viewMode === 'table' ? 'var(--bg-hover)' : 'transparent',
-                  color: viewMode === 'table' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: viewMode === 'table' ? 'var(--navy)' : 'var(--bg-surface)',
+                  color: viewMode === 'table' ? '#fff' : 'var(--text-secondary)',
                   cursor: 'pointer',
-                  fontSize: '0.8rem'
+                  fontWeight: 500,
+                  fontSize: '0.82rem'
                 }}
               >
                 Table
@@ -496,13 +688,14 @@ export default function App() {
               <button
                 onClick={() => setViewMode('cards')}
                 style={{
-                  padding: '5px 12px',
-                  borderRadius: '5px',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
                   border: '1px solid var(--border-subtle)',
-                  background: viewMode === 'cards' ? 'var(--bg-hover)' : 'transparent',
-                  color: viewMode === 'cards' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: viewMode === 'cards' ? 'var(--navy)' : 'var(--bg-surface)',
+                  color: viewMode === 'cards' ? '#fff' : 'var(--text-secondary)',
                   cursor: 'pointer',
-                  fontSize: '0.8rem'
+                  fontWeight: 500,
+                  fontSize: '0.82rem'
                 }}
               >
                 Cards
@@ -513,13 +706,14 @@ export default function App() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
-                  padding: '5px 12px',
-                  borderRadius: '5px',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
                   border: '1px solid var(--border-subtle)',
-                  background: viewMode === 'json' ? 'var(--bg-hover)' : 'transparent',
-                  color: viewMode === 'json' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: viewMode === 'json' ? 'var(--navy)' : 'var(--bg-surface)',
+                  color: viewMode === 'json' ? '#fff' : 'var(--text-secondary)',
                   cursor: 'pointer',
-                  fontSize: '0.8rem'
+                  fontWeight: 500,
+                  fontSize: '0.82rem'
                 }}
               >
                 <Code2 size={13} />
@@ -534,12 +728,12 @@ export default function App() {
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
                 style={{
-                  padding: '6px 10px',
+                  padding: '6px 12px',
                   background: 'var(--bg-surface)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: '5px',
+                  borderRadius: '6px',
                   color: 'var(--text-primary)',
-                  fontSize: '0.8rem',
+                  fontSize: '0.82rem',
                   outline: 'none',
                   width: '180px'
                 }}
@@ -551,13 +745,14 @@ export default function App() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '5px',
-                  padding: '6px 12px',
-                  borderRadius: '5px',
-                  border: '1px solid var(--border-subtle)',
-                  background: 'var(--bg-surface)',
-                  color: 'var(--text-primary)',
+                  padding: '6px 13px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: 'var(--navy)',
+                  color: '#fff',
                   cursor: 'pointer',
-                  fontSize: '0.8rem'
+                  fontWeight: 500,
+                  fontSize: '0.82rem'
                 }}
               >
                 <Download size={13} />
@@ -571,12 +766,13 @@ export default function App() {
             <div style={{
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              overflowX: 'auto'
+              borderRadius: '8px',
+              overflowX: 'auto',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.83rem' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', background: 'var(--bg-page)' }}>
                     <th style={{ padding: '10px 14px', width: '40px' }}>#</th>
                     <th style={{ padding: '10px 14px', width: '130px' }}>Location</th>
                     <th style={{ padding: '10px 14px', width: '90px' }}>Beds</th>
@@ -587,29 +783,31 @@ export default function App() {
                 </thead>
                 <tbody>
                   {filteredResults.map((item) => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <td style={{ padding: '10px 14px', color: 'var(--text-tertiary)' }}>{item.id}</td>
-                      <td style={{ padding: '10px 14px', fontWeight: 500, color: 'var(--text-primary)' }}>{item.location}</td>
+                    <tr key={item.id} style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.15s ease' }}>
+                      <td style={{ padding: '10px 14px', color: 'var(--text-tertiary)', fontWeight: 500 }}>{item.id}</td>
+                      <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--navy)' }}>{item.location}</td>
                       <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>
                         {item.bedrooms ? `${item.bedrooms} BHK` : 'Studio'}
                       </td>
-                      <td style={{ padding: '10px 14px', color: 'var(--text-primary)' }}>{item.price}</td>
+                      <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--accent)' }}>{item.price}</td>
                       <td style={{ padding: '10px 14px' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                           {item.key_features?.map((f, i) => (
                             <span key={i} style={{
-                              fontSize: '0.74rem',
-                              padding: '1px 6px',
-                              background: 'var(--bg-subtle)',
-                              borderRadius: '3px',
-                              color: 'var(--text-secondary)'
+                              fontSize: '0.73rem',
+                              padding: '2px 7px',
+                              background: 'var(--accent-soft)',
+                              border: '1px solid var(--accent-soft-border)',
+                              borderRadius: '4px',
+                              color: 'var(--accent)',
+                              fontWeight: 500
                             }}>
                               {f}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
                         {item.summary}
                       </td>
                     </tr>
@@ -624,33 +822,34 @@ export default function App() {
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-              gap: '12px'
+              gap: '14px'
             }}>
               {filteredResults.map((item) => (
                 <div key={item.id} style={{
                   background: 'var(--bg-surface)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: '6px',
-                  padding: '14px',
+                  borderRadius: '8px',
+                  padding: '16px',
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'space-between'
+                  justifyContent: 'space-between',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                 }}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '0.92rem' }}>
                         {item.location}
                       </span>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: '0.92rem' }}>
                         {item.price}
                       </span>
                     </div>
 
-                    <div style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem', marginBottom: '8px' }}>
+                    <div style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem', marginBottom: '8px', fontWeight: 500 }}>
                       {item.bedrooms ? `${item.bedrooms} BHK` : 'Studio'} · #{item.id}
                     </div>
 
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', lineHeight: '1.45', marginBottom: '10px' }}>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.83rem', lineHeight: '1.45', marginBottom: '12px' }}>
                       {item.summary}
                     </p>
 
@@ -658,11 +857,13 @@ export default function App() {
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
                         {item.key_features.map((feat, fIdx) => (
                           <span key={fIdx} style={{
-                            fontSize: '0.72rem',
-                            padding: '1px 6px',
-                            background: 'var(--bg-subtle)',
-                            borderRadius: '3px',
-                            color: 'var(--text-secondary)'
+                            fontSize: '0.73rem',
+                            padding: '2px 7px',
+                            background: 'var(--accent-soft)',
+                            border: '1px solid var(--accent-soft-border)',
+                            borderRadius: '4px',
+                            color: 'var(--accent)',
+                            fontWeight: 500
                           }}>
                             {feat}
                           </span>
@@ -679,7 +880,7 @@ export default function App() {
                         border: 'none',
                         color: 'var(--text-tertiary)',
                         cursor: 'pointer',
-                        fontSize: '0.74rem',
+                        fontSize: '0.75rem',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '3px',
@@ -692,11 +893,11 @@ export default function App() {
                     {expandedRows[item.id] && (
                       <div style={{
                         marginTop: '6px',
-                        padding: '6px 8px',
+                        padding: '8px 10px',
                         background: 'var(--bg-page)',
-                        borderRadius: '4px',
-                        fontSize: '0.74rem',
-                        color: 'var(--text-tertiary)',
+                        borderRadius: '5px',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-secondary)',
                         lineHeight: 1.4
                       }}>
                         {item.raw_description}
@@ -713,15 +914,16 @@ export default function App() {
             <div style={{
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              padding: '14px'
+              borderRadius: '8px',
+              padding: '16px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}>
               <pre style={{
                 maxHeight: '400px',
                 overflowY: 'auto',
-                fontSize: '0.78rem',
-                color: 'var(--text-secondary)',
-                lineHeight: 1.4
+                fontSize: '0.8rem',
+                color: 'var(--navy)',
+                lineHeight: 1.45
               }}>
                 {JSON.stringify(results, null, 2)}
               </pre>

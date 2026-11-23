@@ -1,22 +1,32 @@
 :root {
-  --bg-page: #09090b;
-  --bg-surface: #121215;
-  --bg-subtle: #18181b;
-  --bg-hover: #222226;
-  --border-subtle: #27272a;
-  --border-strong: #3f3f46;
+  /* Nextburb Brand Palette */
+  --bg-page: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
   
-  --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
   
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --success-text: #34d399;
-  --danger-text: #f87171;
+  /* Nextburb Coral & Deep Navy */
+  --accent: #ff4b6e;
+  --accent-hover: #e11d48;
+  --accent-soft: #fff1f4;
+  --accent-soft-border: #ffe4e8;
+  
+  --navy: #0f172a;
+  --navy-hover: #1e293b;
+  
+  --success-text: #059669;
+  --success-bg: #ecfdf5;
+  --danger-text: #e11d48;
+  --danger-bg: #fff1f2;
 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -42,6 +52,34 @@ input, button, table {
   font-family: inherit;
 }
 
+/* Animations */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes progressPulse {
+  0% { width: 15%; }
+  50% { width: 75%; }
+  100% { width: 95%; }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite linear;
+  border-radius: 4px;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -51,9 +89,9 @@ input, button, table {
   background: var(--bg-page);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
+  background: var(--border-strong);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong);
+  background: #94a3b8;
 }
